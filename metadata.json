@@ -1,0 +1,6 @@
+{
+  "name": "DearDiary",
+  "description": "An offline-first, emotionally intelligent private AI diary.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
