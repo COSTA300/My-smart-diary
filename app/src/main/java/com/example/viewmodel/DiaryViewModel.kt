@@ -59,6 +59,11 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
     val selectedCompanion = MutableStateFlow(CompanionPersonality.MAYA)
     val activeTheme = MutableStateFlow("SAGE_CALM") // Themes: SAGE_CALM, MIDNIGHT_VELVET, EMBER_GLOW, AMBER_ROSE
 
+    val isGeminiConfigured = MutableStateFlow(
+        com.example.BuildConfig.GEMINI_API_KEY.isNotEmpty() && 
+        com.example.BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
+    ).asStateFlow()
+
     // Database Reactive Flows (entries depend on unlocked or decoy status)
     private val _allEntries = MutableStateFlow<List<DecryptedDiaryEntry>>(emptyList())
     val allEntries: StateFlow<List<DecryptedDiaryEntry>> = _allEntries.asStateFlow()
@@ -244,7 +249,12 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             inputThoughts.value = ""
 
             // 2. Generate and insert AI companion response
-            val companionMsg = CompanionEngine.generateResponse(thoughtsText, moodText, companion)
+            val companionMsg = com.example.ai.GeminiClient.getAIResponse(
+                userInput = thoughtsText,
+                mood = moodText,
+                personality = companion,
+                history = emptyList()
+            ) ?: CompanionEngine.generateResponse(thoughtsText, moodText, companion)
             
             val companionChatMsg = DecryptedChatMessage(
                 entryId = entryId,
@@ -281,7 +291,12 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             val personality = CompanionPersonality.values().firstOrNull { it.displayName == entry.companionName } 
                 ?: CompanionPersonality.MAYA
                 
-            val replyMsg = CompanionEngine.generateResponse(replyText, entry.mood, personality)
+            val replyMsg = com.example.ai.GeminiClient.getAIResponse(
+                userInput = replyText,
+                mood = entry.mood,
+                personality = personality,
+                history = _activeChatMessages.value
+            ) ?: CompanionEngine.generateResponse(replyText, entry.mood, personality)
             val companionMsg = DecryptedChatMessage(
                 entryId = entry.id,
                 sender = "companion",

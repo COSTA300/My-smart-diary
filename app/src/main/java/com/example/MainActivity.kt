@@ -1399,6 +1399,7 @@ fun SanctuarySettingsScreen(
     onToggleDarkMode: () -> Unit
 ) {
     val activeThemeId by viewModel.activeTheme.collectAsStateWithLifecycle()
+    val isGeminiConfigured by viewModel.isGeminiConfigured.collectAsStateWithLifecycle()
     val helperContext = LocalContext.current
 
     Column(
@@ -1452,6 +1453,49 @@ fun SanctuarySettingsScreen(
                     )
                     Text(
                         text = if (isDecoy) "Displaying simulated fallback diary. Real indices are highly hidden." else "All cryptographic vectors verified. Sanctuary active.",
+                        fontSize = 12.sp,
+                        color = palette.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+
+        // Live AI Engine Status Card
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isGeminiConfigured) palette.surface else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (isGeminiConfigured) palette.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isGeminiConfigured) Icons.Default.Star else Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = if (isGeminiConfigured) palette.primary else MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (isGeminiConfigured) "AI Companions: Live (Gemini)" else "AI Companions: Local secure fallback",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = if (isGeminiConfigured) palette.primary else MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = if (isGeminiConfigured) {
+                            "Equipped with deep emotional intelligence context. Fuelled by real-time Google cloud models."
+                        } else {
+                            "Offline-safe canned responses active. To activate live Gemini, add GEMINI_API_KEY in the platform's Secrets panel."
+                        },
                         fontSize = 12.sp,
                         color = palette.onSurface.copy(alpha = 0.7f)
                     )
