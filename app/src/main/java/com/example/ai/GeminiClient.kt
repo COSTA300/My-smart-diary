@@ -8,12 +8,19 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
+
+sealed class GeminiResult {
+    data class Success(val responseText: String) : GeminiResult()
+    data class Error(val exceptionMessage: String) : GeminiResult()
+    object KeyNotConfigured : GeminiResult()
+}
 
 @JsonClass(generateAdapter = true)
 data class GeminiRequest(
@@ -78,12 +85,18 @@ object GeminiClient {
         userInput: String,
         mood: String,
         personality: CompanionPersonality,
-        history: List<com.example.data.DecryptedChatMessage>
-    ): String? = withContext(Dispatchers.IO) {
-        val apiKey = com.example.BuildConfig.GEMINI_API_KEY
-        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-            Log.w(TAG, "Gemini API key is set to placeholder or empty. Live companion response will fallback to local engine.")
-            return@withContext null
+        history: List<com.example.data.DecryptedChatMessage>,
+        entryText: String? = null,
+        apiKeyOverride: String = ""
+    ): GeminiResult = withContext(Dispatchers.IO) {
+        // Use the manual key if supplied (e.g. from app settings), otherwise fallback to the BuildConfig key
+        val apiKey = apiKeyOverride.trim().ifBlank { 
+            com.example.BuildConfig.GEMINI_API_KEY.trim() 
+        }
+
+        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY" || apiKey == "placeholder") {
+            Log.w(TAG, "Gemini API key is not configured. Falling back to local/offline engine.")
+            return@withContext GeminiResult.KeyNotConfigured
         }
 
         val systemPrompt = when (personality) {
@@ -98,31 +111,65 @@ object GeminiClient {
             }
         }
 
-        // Build contents history
         val contentsList = mutableListOf<GeminiContent>()
-        
-        // Map history to contents list
-        // Limit history to the last 10 messages to keep request small and fast
-        val recentHistory = history.takeLast(10)
-        recentHistory.forEach { msg ->
-            val role = if (msg.sender == "user") "user" else "model"
+
+        // 1. If we have the initial entry description, prepend it as the first 'user' interaction 
+        // to provide full emotional journal context to the live model!
+        if (!entryText.isNullOrBlank()) {
             contentsList.add(
                 GeminiContent(
-                    role = role,
-                    parts = listOf(GeminiPart(text = msg.text))
+                    role = "user",
+                    parts = listOf(GeminiPart(text = "The user has logged their mood today as: $mood. Here is their reflection/message: $entryText"))
                 )
             )
         }
 
-        // Add the current input if it's not already in the history as the last element
+        // 2. Iterate and append existing chat history
+        // To prevent network packet bloat and stay within rate units, limit to the last 10 messages
+        val recentHistory = history.takeLast(10)
+        recentHistory.forEach { msg ->
+            val role = if (msg.sender == "user") "user" else "model"
+            val lastAdded = contentsList.lastOrNull()
+            
+            if (lastAdded != null && lastAdded.role == role) {
+                // If consecutive roles are identical, merge their text parts to satisfy API alternating design
+                val mergedParts = lastAdded.parts + GeminiPart(text = msg.text)
+                contentsList[contentsList.size - 1] = lastAdded.copy(parts = mergedParts)
+            } else {
+                contentsList.add(
+                    GeminiContent(
+                        role = role,
+                        parts = listOf(GeminiPart(text = msg.text))
+                    )
+                )
+            }
+        }
+
+        // 3. Add the active input, taking care of repetition and alternating structures
         val lastInputMsg = recentHistory.lastOrNull()
         if (lastInputMsg == null || lastInputMsg.text != userInput) {
-            contentsList.add(
-                GeminiContent(
-                    role = "user",
-                    parts = listOf(GeminiPart(text = "The user has logged their mood today as: $mood. Here is their reflection/message: $userInput"))
+            val role = "user"
+            val lastAdded = contentsList.lastOrNull()
+            if (lastAdded != null && lastAdded.role == role) {
+                // Merge parts
+                val mergedParts = lastAdded.parts + GeminiPart(text = userInput)
+                contentsList[contentsList.size - 1] = lastAdded.copy(parts = mergedParts)
+            } else {
+                contentsList.add(
+                    GeminiContent(
+                        role = role,
+                        parts = listOf(GeminiPart(text = userInput))
+                    )
                 )
-            )
+            }
+        }
+
+        // 4. Critical Correction: A chat thread MUST always start with a 'user' turn in Gemini
+        if (contentsList.isNotEmpty() && contentsList.first().role == "model") {
+            contentsList.add(0, GeminiContent(
+                role = "user",
+                parts = listOf(GeminiPart(text = "[Initializing conversation thread with the emotional companion]"))
+            ))
         }
 
         val request = GeminiRequest(
@@ -136,14 +183,19 @@ object GeminiClient {
             val response = apiService.generateContent(apiKey, request)
             val responseText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
             if (responseText.isNullOrBlank()) {
-                Log.e(TAG, "Gemini API returned an empty or blank response candidate.")
-                null
+                Log.e(TAG, "Gemini API response content was empty/blank.")
+                GeminiResult.Error("Empty response candidate returned by model.")
             } else {
-                responseText
+                GeminiResult.Success(responseText)
             }
+        } catch (e: HttpException) {
+            val msg = "HTTP ${e.code()}: ${e.message()}"
+            Log.e(TAG, msg, e)
+            GeminiResult.Error(msg)
         } catch (e: Exception) {
-            Log.e(TAG, "Uncaught Exception during Gemini REST invocation: ${e.localizedMessage}", e)
-            null
+            val msg = e.localizedMessage ?: "Uncaught Network IO Exception"
+            Log.e(TAG, "Exception during Gemini REST invocation: $msg", e)
+            GeminiResult.Error(msg)
         }
     }
 }

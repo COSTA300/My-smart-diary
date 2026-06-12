@@ -1,8 +1,11 @@
 package com.example.data
 
 import androidx.room.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
 import javax.crypto.spec.SecretKeySpec
 
 @Entity(tableName = "diary_entries")
@@ -121,10 +124,10 @@ class DiaryRepository(private val dao: DiaryDao) {
                     isDecoy = entity.isDecoy
                 )
             }
-        }
+        }.flowOn(Dispatchers.IO)
     }
 
-    suspend fun insertDecryptedEntry(entry: DecryptedDiaryEntry): Long {
+    suspend fun insertDecryptedEntry(entry: DecryptedDiaryEntry): Long = withContext(Dispatchers.IO) {
         val entity = DiaryEntryEntity(
             id = entry.id,
             dateStr = entry.dateStr,
@@ -136,7 +139,7 @@ class DiaryRepository(private val dao: DiaryDao) {
             encryptedMainText = encryptText(entry.mainText),
             isDecoy = entry.isDecoy
         )
-        return dao.insertEntry(entity)
+        dao.insertEntry(entity)
     }
 
     fun getDecryptedMessagesForEntry(entryId: Long): Flow<List<DecryptedChatMessage>> {
@@ -150,10 +153,10 @@ class DiaryRepository(private val dao: DiaryDao) {
                     timestamp = entity.timestamp
                 )
             }
-        }
+        }.flowOn(Dispatchers.IO)
     }
 
-    suspend fun insertDecryptedMessage(msg: DecryptedChatMessage): Long {
+    suspend fun insertDecryptedMessage(msg: DecryptedChatMessage): Long = withContext(Dispatchers.IO) {
         val entity = ChatMessageEntity(
             id = msg.id,
             entryId = msg.entryId,
@@ -161,10 +164,10 @@ class DiaryRepository(private val dao: DiaryDao) {
             encryptedText = encryptText(msg.text),
             timestamp = msg.timestamp
         )
-        return dao.insertMessage(entity)
+        dao.insertMessage(entity)
     }
 
-    suspend fun deleteEntry(entryId: Long) {
+    suspend fun deleteEntry(entryId: Long) = withContext(Dispatchers.IO) {
         dao.deleteEntry(entryId)
         dao.deleteMessagesForEntry(entryId)
     }

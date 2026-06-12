@@ -59,10 +59,32 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
     val selectedCompanion = MutableStateFlow(CompanionPersonality.MAYA)
     val activeTheme = MutableStateFlow("SAGE_CALM") // Themes: SAGE_CALM, MIDNIGHT_VELVET, EMBER_GLOW, AMBER_ROSE
 
-    val isGeminiConfigured = MutableStateFlow(
-        com.example.BuildConfig.GEMINI_API_KEY.isNotEmpty() && 
-        com.example.BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY"
-    ).asStateFlow()
+    val aiConversationEnabled = MutableStateFlow(sharedPrefs.getBoolean("ai_conversation_enabled", true))
+
+    fun setAiConversationEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("ai_conversation_enabled", enabled).apply()
+        aiConversationEnabled.value = enabled
+    }
+
+    val customApiKey = MutableStateFlow(sharedPrefs.getString("custom_gemini_api_key", "") ?: "")
+
+    val isGeminiConfigured: StateFlow<Boolean> = customApiKey.map { customKey ->
+        (customKey.isNotBlank() && customKey != "placeholder" && customKey != "MY_GEMINI_API_KEY") || 
+        (com.example.BuildConfig.GEMINI_API_KEY.isNotEmpty() && com.example.BuildConfig.GEMINI_API_KEY != "MY_GEMINI_API_KEY" && com.example.BuildConfig.GEMINI_API_KEY != "placeholder")
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setCustomApiKey(key: String) {
+        sharedPrefs.edit().putString("custom_gemini_api_key", key.trim()).apply()
+        customApiKey.value = key.trim()
+    }
+
+    fun getEffectiveApiKey(): String {
+        val customKey = customApiKey.value
+        if (customKey.isNotBlank() && customKey != "placeholder" && customKey != "MY_GEMINI_API_KEY") {
+            return customKey
+        }
+        return com.example.BuildConfig.GEMINI_API_KEY
+    }
 
     // Database Reactive Flows (entries depend on unlocked or decoy status)
     private val _allEntries = MutableStateFlow<List<DecryptedDiaryEntry>>(emptyList())
@@ -73,6 +95,9 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _activeChatMessages = MutableStateFlow<List<DecryptedChatMessage>>(emptyList())
     val activeChatMessages: StateFlow<List<DecryptedChatMessage>> = _activeChatMessages.asStateFlow()
+
+    private var observeEntriesJob: kotlinx.coroutines.Job? = null
+    private var activeChatMessagesJob: kotlinx.coroutines.Job? = null
 
     init {
         // Evaluate initial locking state
@@ -186,6 +211,11 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
 
     fun lockDiary() {
         repository.clearKey()
+        observeEntriesJob?.cancel()
+        observeEntriesJob = null
+        activeChatMessagesJob?.cancel()
+        activeChatMessagesJob = null
+        
         _selectedEntry.value = null
         _allEntries.value = emptyList()
         _activeChatMessages.value = emptyList()
@@ -193,8 +223,9 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun observeEntries() {
+        observeEntriesJob?.cancel()
         // Collect reactive entries flow based on decoy status
-        viewModelScope.launch {
+        observeEntriesJob = viewModelScope.launch {
             repository.getDecryptedEntries(isDecoy = _isDecoySession.value).collect { list ->
                 _allEntries.value = list
                 // Update selected entry object if it's currently selected
@@ -210,8 +241,9 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
     fun selectEntry(entry: DecryptedDiaryEntry?) {
         _selectedEntry.value = entry
         _activeChatMessages.value = emptyList()
+        activeChatMessagesJob?.cancel()
         if (entry != null) {
-            viewModelScope.launch {
+            activeChatMessagesJob = viewModelScope.launch {
                 repository.getDecryptedMessagesForEntry(entry.id).collect { messages ->
                     _activeChatMessages.value = messages
                 }
@@ -249,20 +281,35 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             inputThoughts.value = ""
 
             // 2. Generate and insert AI companion response
-            val companionMsg = com.example.ai.GeminiClient.getAIResponse(
-                userInput = thoughtsText,
-                mood = moodText,
-                personality = companion,
-                history = emptyList()
-            ) ?: CompanionEngine.generateResponse(thoughtsText, moodText, companion)
-            
-            val companionChatMsg = DecryptedChatMessage(
-                entryId = entryId,
-                sender = "companion",
-                text = companionMsg,
-                timestamp = System.currentTimeMillis() + 100 // slight delay for logs sorting
-            )
-            repository.insertDecryptedMessage(companionChatMsg)
+            if (aiConversationEnabled.value) {
+                val apiKeyToUse = getEffectiveApiKey()
+                val companionMsgResult = com.example.ai.GeminiClient.getAIResponse(
+                    userInput = thoughtsText,
+                    mood = moodText,
+                    personality = companion,
+                    history = emptyList(),
+                    apiKeyOverride = apiKeyToUse
+                )
+
+                val companionMsg = when (companionMsgResult) {
+                    is com.example.ai.GeminiResult.Success -> companionMsgResult.responseText
+                    is com.example.ai.GeminiResult.Error -> {
+                        "[Connection Notice: Live companion offline (${companionMsgResult.exceptionMessage}). Fallback sequence loaded]\n\n" +
+                        CompanionEngine.generateResponse(thoughtsText, moodText, companion)
+                    }
+                    is com.example.ai.GeminiResult.KeyNotConfigured -> {
+                        CompanionEngine.generateResponse(thoughtsText, moodText, companion)
+                    }
+                }
+                
+                val companionChatMsg = DecryptedChatMessage(
+                    entryId = entryId,
+                    sender = "companion",
+                    text = companionMsg,
+                    timestamp = System.currentTimeMillis() + 100 // slight delay for logs sorting
+                )
+                repository.insertDecryptedMessage(companionChatMsg)
+            }
 
             // Automatically select today's entry to view the interactive chat board directly
             val insertedEntry = newEntry.copy(id = entryId)
@@ -291,12 +338,27 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             val personality = CompanionPersonality.values().firstOrNull { it.displayName == entry.companionName } 
                 ?: CompanionPersonality.MAYA
                 
-            val replyMsg = com.example.ai.GeminiClient.getAIResponse(
+            val apiKeyToUse = getEffectiveApiKey()
+            val replyMsgResult = com.example.ai.GeminiClient.getAIResponse(
                 userInput = replyText,
                 mood = entry.mood,
                 personality = personality,
-                history = _activeChatMessages.value
-            ) ?: CompanionEngine.generateResponse(replyText, entry.mood, personality)
+                history = _activeChatMessages.value,
+                entryText = entry.mainText,
+                apiKeyOverride = apiKeyToUse
+            )
+
+            val replyMsg = when (replyMsgResult) {
+                is com.example.ai.GeminiResult.Success -> replyMsgResult.responseText
+                is com.example.ai.GeminiResult.Error -> {
+                    "[Connection Notice: Live companion offline (${replyMsgResult.exceptionMessage}). Fallback sequence loaded]\n\n" +
+                    CompanionEngine.generateResponse(replyText, entry.mood, personality)
+                }
+                is com.example.ai.GeminiResult.KeyNotConfigured -> {
+                    CompanionEngine.generateResponse(replyText, entry.mood, personality)
+                }
+            }
+
             val companionMsg = DecryptedChatMessage(
                 entryId = entry.id,
                 sender = "companion",
@@ -304,6 +366,42 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
                 timestamp = System.currentTimeMillis() + 150
             )
             repository.insertDecryptedMessage(companionMsg)
+        }
+    }
+
+    fun startAiConversationForActiveEntry() {
+        val entry = _selectedEntry.value ?: return
+        viewModelScope.launch {
+            val apiKeyToUse = getEffectiveApiKey()
+            val companion = CompanionPersonality.values().firstOrNull { it.displayName == entry.companionName } 
+                ?: CompanionPersonality.MAYA
+                
+            val companionMsgResult = com.example.ai.GeminiClient.getAIResponse(
+                userInput = entry.mainText,
+                mood = entry.mood,
+                personality = companion,
+                history = emptyList(),
+                apiKeyOverride = apiKeyToUse
+            )
+
+            val companionMsg = when (companionMsgResult) {
+                is com.example.ai.GeminiResult.Success -> companionMsgResult.responseText
+                is com.example.ai.GeminiResult.Error -> {
+                    "[Connection Notice: Live companion offline (${companionMsgResult.exceptionMessage}). Fallback sequence loaded]\n\n" +
+                    CompanionEngine.generateResponse(entry.mainText, entry.mood, companion)
+                }
+                is com.example.ai.GeminiResult.KeyNotConfigured -> {
+                    CompanionEngine.generateResponse(entry.mainText, entry.mood, companion)
+                }
+            }
+            
+            val companionChatMsg = DecryptedChatMessage(
+                entryId = entry.id,
+                sender = "companion",
+                text = companionMsg,
+                timestamp = System.currentTimeMillis() + 100
+            )
+            repository.insertDecryptedMessage(companionChatMsg)
         }
     }
 

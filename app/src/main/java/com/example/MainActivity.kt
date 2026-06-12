@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -907,6 +908,106 @@ fun DailyCheckinScreen(
             }
         }
 
+        // Expression Choice Mode Segment
+        val aiEnabled by viewModel.aiConversationEnabled.collectAsStateWithLifecycle()
+
+        Column {
+            Text(
+                text = "Expression Mode Preference:",
+                fontWeight = FontWeight.SemiBold,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Choice A: Dialog
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { viewModel.setAiConversationEnabled(true) }
+                        .testTag("expression_mode_ai"),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (aiEnabled) palette.primary.copy(alpha = 0.15f) else palette.surface
+                    ),
+                    border = BorderStroke(
+                        width = if (aiEnabled) 2.dp else 1.dp,
+                        color = if (aiEnabled) palette.primary else palette.onSurface.copy(alpha = 0.10f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = if (aiEnabled) palette.primary else palette.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "AI Companion",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = palette.onSurface
+                        )
+                        Text(
+                            text = "Interactive dialogue",
+                            fontSize = 10.sp,
+                            color = palette.onSurface.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                // Choice B: Private Notepad
+                Card(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { viewModel.setAiConversationEnabled(false) }
+                        .testTag("expression_mode_notepad"),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (!aiEnabled) palette.primary.copy(alpha = 0.15f) else palette.surface
+                    ),
+                    border = BorderStroke(
+                        width = if (!aiEnabled) 2.dp else 1.dp,
+                        color = if (!aiEnabled) palette.primary else palette.onSurface.copy(alpha = 0.10f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = if (!aiEnabled) palette.primary else palette.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Private Notepad",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = palette.onSurface
+                        )
+                        Text(
+                            text = "Offline reflection only",
+                            fontSize = 10.sp,
+                            color = palette.onSurface.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+
         // Multiline Entry Pad
         OutlinedTextField(
             value = thoughtsText,
@@ -949,7 +1050,10 @@ fun DailyCheckinScreen(
             ) {
                 Icon(imageVector = Icons.Default.Send, contentDescription = "Publish thoughts")
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Pour & Seek Understanding", fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (aiEnabled) "Pour & Seek Understanding" else "Save Private Notepad Log",
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -1300,88 +1404,162 @@ fun ChatCompanionScreen(
                 }
             }
 
-            // Loop chat messages below
-            messages.forEach { msg ->
-                val isUser = msg.sender == "user"
-                Box(
+            if (messages.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = palette.surface),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, palette.primary.copy(alpha = 0.2f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(
-                            start = if (isUser) 48.dp else 0.dp,
-                            end = if (isUser) 0.dp else 48.dp
-                        ),
-                    contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+                        .padding(top = 16.dp)
+                        .testTag("notepad_notice_card")
                 ) {
-                    Surface(
-                        color = if (isUser) palette.lightAccent else palette.surface,
-                        shape = if (isUser) {
-                            RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
-                        } else {
-                            RoundedCornerShape(topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
-                        },
-                        border = if (!isUser) BorderStroke(1.dp, palette.primary.copy(alpha = 0.15f)) else null
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = palette.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isUser) "You:" else entry.companionName,
-                                fontSize = 11.sp,
+                                text = "Quiet Notepad Reflection",
                                 fontWeight = FontWeight.Bold,
-                                color = if (isUser) palette.primary else palette.extraAccent
+                                fontSize = 15.sp,
+                                color = palette.primary
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = msg.text,
-                                fontSize = 14.sp,
-                                color = palette.onSurface,
-                                lineHeight = 20.sp
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "This entry is safely saved in Notepad Mode. No interactive AI companion replies are registered for this thought.",
+                            fontSize = 13.sp,
+                            color = palette.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { viewModel.startAiConversationForActiveEntry() },
+                            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("initiate_ai_conversation_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Conversate with AI Companion", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
+                // Loop chat messages below
+                messages.forEach { msg ->
+                    val isUser = msg.sender == "user"
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = if (isUser) 48.dp else 1.dp,
+                                end = if (isUser) 1.dp else 48.dp
+                            ),
+                        contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+                    ) {
+                        Surface(
+                            color = if (isUser) palette.lightAccent else palette.surface,
+                            shape = if (isUser) {
+                                RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                            } else {
+                                RoundedCornerShape(topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                            },
+                            border = if (!isUser) BorderStroke(1.dp, palette.primary.copy(alpha = 0.15f)) else null
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = if (isUser) "You:" else entry.companionName,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isUser) palette.primary else palette.extraAccent
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = msg.text,
+                                    fontSize = 14.sp,
+                                    color = palette.onSurface,
+                                    lineHeight = 20.sp
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Bottom input row inside active dialog to recurse chats
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(palette.surface)
-                .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedTextField(
-                value = innerTextReply,
-                onValueChange = { innerTextReply = it },
-                placeholder = { Text("Contribute to dialogue, ask advice...", fontSize = 13.sp) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = palette.primary,
-                    unfocusedBorderColor = palette.onSurface.copy(alpha = 0.1f),
-                    focusedTextColor = palette.onSurface,
-                    unfocusedTextColor = palette.onSurface
-                ),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-
-            IconButton(
-                onClick = {
-                    if (innerTextReply.isNotBlank()) {
-                        viewModel.sendChatMessage(innerTextReply)
-                        innerTextReply = ""
-                    }
-                },
+        // Bottom input row inside active dialog to recurse chats (only show if conversation is active/not empty)
+        if (messages.isNotEmpty()) {
+            Row(
                 modifier = Modifier
-                    .background(palette.primary, CircleShape)
-                    .size(44.dp)
+                    .fillMaxWidth()
+                    .background(palette.surface)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = "Submit dialog reply",
-                    tint = palette.onPrimary,
-                    modifier = Modifier.size(20.dp)
+                OutlinedTextField(
+                    value = innerTextReply,
+                    onValueChange = { innerTextReply = it },
+                    placeholder = { Text("Contribute to dialogue, ask advice...", fontSize = 13.sp) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = palette.primary,
+                        unfocusedBorderColor = palette.onSurface.copy(alpha = 0.1f),
+                        focusedTextColor = palette.onSurface,
+                        unfocusedTextColor = palette.onSurface
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                IconButton(
+                    onClick = {
+                        if (innerTextReply.isNotBlank()) {
+                            viewModel.sendChatMessage(innerTextReply)
+                            innerTextReply = ""
+                        }
+                    },
+                    modifier = Modifier
+                        .background(palette.primary, CircleShape)
+                        .size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "Submit dialogue reply",
+                        tint = palette.onPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        } else {
+            // Serene secure message footer when in notepad mode
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(palette.surface)
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "🔒 Secured private log. No cloud transmitting.",
+                    fontSize = 11.sp,
+                    color = palette.onSurface.copy(alpha = 0.4f),
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
                 )
             }
         }
@@ -1460,6 +1638,54 @@ fun SanctuarySettingsScreen(
             }
         }
 
+        // Global Default Expression Mode Preference Card
+        val defaultAiEnabled by viewModel.aiConversationEnabled.collectAsStateWithLifecycle()
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = palette.surface),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, palette.primary.copy(alpha = 0.2f)),
+            modifier = Modifier.fillMaxWidth().testTag("settings_expression_mode_card")
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = palette.primary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Default Expression Preference",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = palette.onSurface
+                        )
+                        Text(
+                            text = if (defaultAiEnabled) "Default: Interactive AI Companion is active" else "Default: Private Quiet Notepad Mode is active",
+                            fontSize = 12.sp,
+                            color = palette.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                    Switch(
+                        checked = defaultAiEnabled,
+                        onCheckedChange = { viewModel.setAiConversationEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = palette.primary,
+                            checkedTrackColor = palette.primary.copy(alpha = 0.4f),
+                            uncheckedThumbColor = palette.onSurface.copy(alpha = 0.4f),
+                            uncheckedTrackColor = palette.surface
+                        ),
+                        modifier = Modifier.testTag("settings_expression_mode_switch")
+                    )
+                }
+            }
+        }
+
         // Live AI Engine Status Card
         Card(
             colors = CardDefaults.cardColors(
@@ -1472,33 +1698,137 @@ fun SanctuarySettingsScreen(
             ),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (isGeminiConfigured) Icons.Default.Star else Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = if (isGeminiConfigured) palette.primary else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isGeminiConfigured) Icons.Default.Star else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (isGeminiConfigured) palette.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isGeminiConfigured) "AI Companions: Live (Gemini)" else "AI Companions: Local secure fallback",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = if (isGeminiConfigured) palette.primary else MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = if (isGeminiConfigured) {
+                                "Equipped with deep emotional intelligence context. Fuelled by real-time Google cloud models."
+                            } else {
+                                "Offline-safe canned responses active. To activate live Gemini, add GEMINI_API_KEY in the platform's Secrets panel or enter below."
+                            },
+                            fontSize = 12.sp,
+                            color = palette.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(1.dp).fillMaxWidth().background(palette.primary.copy(alpha = 0.15f)))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Custom API Key Settings Expandable Container
+                var keyExpanded by remember { mutableStateOf(false) }
+                val customKeyVal by viewModel.customApiKey.collectAsStateWithLifecycle()
+                var keyInputVal by remember(customKeyVal) { mutableStateOf(customKeyVal) }
+                var keyIsVisible by remember { mutableStateOf(false) }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { keyExpanded = !keyExpanded }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        text = if (isGeminiConfigured) "AI Companions: Live (Gemini)" else "AI Companions: Local secure fallback",
+                        text = "Real Device Custom API Key Settings",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = palette.primary
+                    )
+                    Text(
+                        text = if (keyExpanded) "[ Hide ]" else "[ Modify ]",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = if (isGeminiConfigured) palette.primary else MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        text = if (isGeminiConfigured) {
-                            "Equipped with deep emotional intelligence context. Fuelled by real-time Google cloud models."
-                        } else {
-                            "Offline-safe canned responses active. To activate live Gemini, add GEMINI_API_KEY in the platform's Secrets panel."
-                        },
                         fontSize = 12.sp,
-                        color = palette.onSurface.copy(alpha = 0.7f)
+                        color = palette.primary
                     )
+                }
+
+                if (keyExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "If you exported this APK to a real device, you can enter your personal Gemini API key here. It remains secure locally inside your encrypted diary storage preference.",
+                        fontSize = 11.sp,
+                        color = palette.onSurface.copy(alpha = 0.6f),
+                        lineHeight = 15.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = keyInputVal,
+                        onValueChange = { keyInputVal = it },
+                        label = { Text("Gemini API Key Override", fontSize = 11.sp) },
+                        placeholder = { Text("AIzaSy...", fontSize = 12.sp) },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = palette.onSurface),
+                        visualTransformation = if (keyIsVisible) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { keyIsVisible = !keyIsVisible }) {
+                                Icon(
+                                    imageVector = if (keyIsVisible) Icons.Default.Check else Icons.Default.Lock,
+                                    contentDescription = "Toggle Visibility",
+                                    tint = palette.primary.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = palette.primary,
+                            unfocusedBorderColor = palette.onSurface.copy(alpha = 0.2f),
+                            focusedLabelColor = palette.primary,
+                            unfocusedLabelColor = palette.onSurface.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("custom_api_key_field")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (customKeyVal.isNotBlank()) {
+                            TextButton(
+                                onClick = {
+                                    viewModel.setCustomApiKey("")
+                                    keyInputVal = ""
+                                }
+                            ) {
+                                Text("Clear Key", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.setCustomApiKey(keyInputVal)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text("Save Key", fontSize = 12.sp, color = palette.surface)
+                        }
+                    }
                 }
             }
         }
