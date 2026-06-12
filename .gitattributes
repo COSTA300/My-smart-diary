@@ -1,0 +1,20 @@
+# Treat binary files correctly in git and prevent line ending modifications
+*.jar binary
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.keystore binary
+*.der binary
+*.pk8 binary
+
+# Ensure correct line endings for bash scripts and gradle files
+*.sh text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+*.properties text
+*.xml text
+*.kt text
+*.kts text
+*.toml text
+*.json text
