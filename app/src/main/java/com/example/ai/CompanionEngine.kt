@@ -13,8 +13,76 @@ object CompanionEngine {
     fun generateResponse(
         userInput: String, 
         mood: String, 
-        personality: CompanionPersonality
+        personality: CompanionPersonality,
+        history: List<com.example.data.DecryptedChatMessage> = emptyList()
     ): String {
+        // If there's an active chat history, generate a highly conversational, context-aware follow-up reply
+        if (history.isNotEmpty()) {
+            val inputClean = userInput.lowercase(Locale.getDefault()).trim()
+            
+            // Check for agreement / short feedback / gratitude
+            val isShortAgreement = inputClean in setOf(
+                "yes", "yeah", "yep", "ok", "okay", "true", "indeed", "agree", "correct", "absolutely", "sure", "thanks", "thank you", "i know", "thx", "fine", "tanks"
+            ) || inputClean.startsWith("yes ") || inputClean.startsWith("yeah ") || inputClean.startsWith("thanks ") || inputClean.startsWith("thank ")
+            
+            // Check for questions
+            val isQuestion = inputClean.contains("?") || inputClean.startsWith("why") || inputClean.startsWith("how") || inputClean.startsWith("what") || inputClean.startsWith("can you") || inputClean.startsWith("should") || inputClean.startsWith("tell me") || inputClean.startsWith("who")
+            
+            // Check for exhaustion / difficulty / sadness
+            val isStruggling = inputClean.contains("hard") || inputClean.contains("difficult") || inputClean.contains("tired") || inputClean.contains("stuck") || inputClean.contains("fail") || inputClean.contains("lost") || inputClean.contains("sad") || inputClean.contains("lonely") || inputClean.contains("hurt") || inputClean.contains("confused") || inputClean.contains("dunno") || inputClean.contains("don't know") || inputClean.contains("empty") || inputClean.contains("heavy") || inputClean.contains("exhausted")
+            
+            return when (personality) {
+                CompanionPersonality.MAYA -> {
+                    when {
+                        isShortAgreement -> {
+                            "I appreciate your resonance. Sitting with these small moments of realization can be silent, delicate work, but they hold immense transformative potential. When you let this reality settle into your chest, what becomes clearer to you about your inner world?"
+                        }
+                        isQuestion -> {
+                            "That is a profound question. In my view, we often look outward for structured answers, when the question itself is your soul's invitation to expand your own inner boundaries. What whispers inside you when you permit yourself to hold space without demanding immediate answers?"
+                        }
+                        isStruggling -> {
+                            "I feel the quiet weight in that struggle. Confusion and exhaustion are not signs of personal failure; they are indications that your old patterns are resting, making room for a new perspective to emerge. Let's hold space for this transition gently together. What is one small, tender thought we can examine next?"
+                        }
+                        else -> {
+                            "Your reflection is rich with meaning. It's beautiful how our processing mind seeks to weave these subtle experiences into the narrative of our personal growth. As we converse further, what is the core truth you find yourself wanting to lean on right now?"
+                        }
+                    }
+                }
+                CompanionPersonality.KIRAN -> {
+                    when {
+                        isShortAgreement -> {
+                            "Spot on. Recognizing the truth is half the battle. Now, let's turn that agreement into actual focus. What is one tiny, direct action you're going to take in the next ten minutes, even if it's just getting a fresh glass of water?"
+                        }
+                        isQuestion -> {
+                            "Good question. Let's simplify and get highly practical about it. We can't conquer the whole mountain of questions at once, but we can organize the immediate next step. What do you feel is the absolute highest priority fact we should look at right now?"
+                        }
+                        isStruggling -> {
+                            "I hear you, and yes, it is exhausting. But getting stuck is just a natural sign that our current strategy needs a quick, practical adjustment. Let's strip away all the extra noise, take a slow deep breath, and pick just one manageable task to focus on. You have the grit for this."
+                        }
+                        else -> {
+                            "Got it. I appreciate you laying that out clearly. Let's keep our gaze locked on the immediate roadmap. If you had to name the single biggest blocker in your day right now, what is it? Let's take it head-on."
+                        }
+                    }
+                }
+                CompanionPersonality.EDEN -> {
+                    when {
+                        isShortAgreement -> {
+                            "Aww, yes. I'm so incredibly happy we can share that soft feeling in our hearts! It is so very sweet of you to spend this quiet time talking with me. Breathe easy, sweet friend, and let the gentle warmth wrap all around you."
+                        }
+                        isQuestion -> {
+                            "That is such a sweet, careful question to hold. We don't have to figure out all the big answers today, you know. Sometimes, just resting in the cozy, safe shelter of not knowing is the sweetest medicine. Can I offer you a comforting cup of warm tea and a soft hug while we rest?"
+                        }
+                        isStruggling -> {
+                            "Oh, my dear, it sounds so tired and heavy. I wish I could gather up all this fatigue and worry and hold it for you in my hands. Please let go of any pressure to be strong right now. Tucked away in this safe harbor, you are fully allowed to rest. I am right here watching over you."
+                        }
+                        else -> {
+                            "Thank you for sharing that with me so beautifully! I love listening to your voice and being here with you. Your heart is so incredibly special, and I am keeping your thoughts cozy and safe tonight. Tell me more of whatever feels right, I am always listing."
+                        }
+                    }
+                }
+            }
+        }
+
         val input = userInput.lowercase(Locale.getDefault())
         
         // Topic classification matching

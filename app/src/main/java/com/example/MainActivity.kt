@@ -1304,6 +1304,7 @@ fun ChatCompanionScreen(
     palette: ColorSanctuary
 ) {
     val messages by viewModel.activeChatMessages.collectAsStateWithLifecycle()
+    val aiEnabled by viewModel.aiConversationEnabled.collectAsStateWithLifecycle()
     var innerTextReply by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
     val listState = rememberScrollState()
@@ -1364,6 +1365,35 @@ fun ChatCompanionScreen(
                     color = palette.onSurface.copy(alpha = 0.5f)
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // On-screen Toggle for interactive AI Companion / Quiet Private Notepad choice
+            Row(
+                modifier = Modifier
+                    .background(
+                        color = if (aiEnabled) palette.primary.copy(alpha = 0.15f) else palette.onSurface.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .clickable { viewModel.setAiConversationEnabled(!aiEnabled) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .testTag("chat_toggle_ai_button"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (aiEnabled) Icons.Default.Star else Icons.Default.Edit,
+                    contentDescription = "Toggle AI mode",
+                    tint = if (aiEnabled) palette.primary else palette.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (aiEnabled) "AI" else "Private",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (aiEnabled) palette.primary else palette.onSurface.copy(alpha = 0.6f)
+                )
+            }
         }
 
         // Scrollable dialogue layout
@@ -1417,14 +1447,14 @@ fun ChatCompanionScreen(
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.Info,
+                                imageVector = if (aiEnabled) Icons.Default.Star else Icons.Default.Info,
                                 contentDescription = null,
                                 tint = palette.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Quiet Notepad Reflection",
+                                text = if (aiEnabled) "AI Companion mode active" else "Quiet Notepad mode active",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 color = palette.primary
@@ -1432,13 +1462,22 @@ fun ChatCompanionScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "This entry is safely saved in Notepad Mode. No interactive AI companion replies are registered for this thought.",
+                            text = if (aiEnabled) {
+                                "Dialogue is active. You can type any follow-up thoughts or problems directly in the text field below to talk with ${entry.companionName}."
+                            } else {
+                                "This entry is safely saved in local private Notepad Mode. You can add more logs below or toggle AI Mode above to involve ${entry.companionName}."
+                            },
                             fontSize = 13.sp,
                             color = palette.onSurface.copy(alpha = 0.7f)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(
-                            onClick = { viewModel.startAiConversationForActiveEntry() },
+                            onClick = { 
+                                if (!aiEnabled) {
+                                    viewModel.setAiConversationEnabled(true)
+                                }
+                                viewModel.startAiConversationForActiveEntry() 
+                            },
                             colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier
@@ -1499,13 +1538,16 @@ fun ChatCompanionScreen(
             }
         }
 
-        // Bottom input row inside active dialog to recurse chats (only show if conversation is active/not empty)
-        if (messages.isNotEmpty()) {
+        // Always show the beautiful input row so the user can type additional reflections or dialogue at any time
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(palette.surface)
+                .navigationBarsPadding()
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(palette.surface)
-                    .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1513,7 +1555,12 @@ fun ChatCompanionScreen(
                 OutlinedTextField(
                     value = innerTextReply,
                     onValueChange = { innerTextReply = it },
-                    placeholder = { Text("Contribute to dialogue, ask advice...", fontSize = 13.sp) },
+                    placeholder = { 
+                        Text(
+                            text = if (aiEnabled) "Ask ${entry.companionName} guidance, reflect..." else "Write private reflection logs...", 
+                            fontSize = 13.sp
+                        ) 
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = palette.primary,
                         unfocusedBorderColor = palette.onSurface.copy(alpha = 0.1f),
@@ -1544,19 +1591,17 @@ fun ChatCompanionScreen(
                     )
                 }
             }
-        } else {
-            // Serene secure message footer when in notepad mode
+            
+            // Subtly integrated security notice under the input bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(palette.surface)
-                    .navigationBarsPadding()
-                    .padding(16.dp),
+                    .padding(bottom = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "🔒 Secured private log. No cloud transmitting.",
-                    fontSize = 11.sp,
+                    text = if (aiEnabled) "🔒 Dialogue is secure" else "🔒 Private Notepad Mode active",
+                    fontSize = 10.sp,
                     color = palette.onSurface.copy(alpha = 0.4f),
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp

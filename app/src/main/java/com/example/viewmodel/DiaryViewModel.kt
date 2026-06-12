@@ -294,11 +294,10 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
                 val companionMsg = when (companionMsgResult) {
                     is com.example.ai.GeminiResult.Success -> companionMsgResult.responseText
                     is com.example.ai.GeminiResult.Error -> {
-                        "[Connection Notice: Live companion offline (${companionMsgResult.exceptionMessage}). Fallback sequence loaded]\n\n" +
-                        CompanionEngine.generateResponse(thoughtsText, moodText, companion)
+                        CompanionEngine.generateResponse(thoughtsText, moodText, companion, emptyList())
                     }
                     is com.example.ai.GeminiResult.KeyNotConfigured -> {
-                        CompanionEngine.generateResponse(thoughtsText, moodText, companion)
+                        CompanionEngine.generateResponse(thoughtsText, moodText, companion, emptyList())
                     }
                 }
                 
@@ -334,38 +333,40 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             )
             repository.insertDecryptedMessage(userMsg)
 
-            // 2. Generate Companion Response (takes active user input in companion personality context)
-            val personality = CompanionPersonality.values().firstOrNull { it.displayName == entry.companionName } 
-                ?: CompanionPersonality.MAYA
-                
-            val apiKeyToUse = getEffectiveApiKey()
-            val replyMsgResult = com.example.ai.GeminiClient.getAIResponse(
-                userInput = replyText,
-                mood = entry.mood,
-                personality = personality,
-                history = _activeChatMessages.value,
-                entryText = entry.mainText,
-                apiKeyOverride = apiKeyToUse
-            )
+            // 2. Generate Companion Response (takes active user input in companion personality context, if enabled)
+            if (aiConversationEnabled.value) {
+                val personality = CompanionPersonality.values().firstOrNull { it.displayName == entry.companionName } 
+                    ?: CompanionPersonality.MAYA
+                    
+                val apiKeyToUse = getEffectiveApiKey()
+                val fullHistoryForGeneration = _activeChatMessages.value + userMsg
+                val replyMsgResult = com.example.ai.GeminiClient.getAIResponse(
+                    userInput = replyText,
+                    mood = entry.mood,
+                    personality = personality,
+                    history = fullHistoryForGeneration,
+                    entryText = entry.mainText,
+                    apiKeyOverride = apiKeyToUse
+                )
 
-            val replyMsg = when (replyMsgResult) {
-                is com.example.ai.GeminiResult.Success -> replyMsgResult.responseText
-                is com.example.ai.GeminiResult.Error -> {
-                    "[Connection Notice: Live companion offline (${replyMsgResult.exceptionMessage}). Fallback sequence loaded]\n\n" +
-                    CompanionEngine.generateResponse(replyText, entry.mood, personality)
+                val replyMsg = when (replyMsgResult) {
+                    is com.example.ai.GeminiResult.Success -> replyMsgResult.responseText
+                    is com.example.ai.GeminiResult.Error -> {
+                        CompanionEngine.generateResponse(replyText, entry.mood, personality, fullHistoryForGeneration)
+                    }
+                    is com.example.ai.GeminiResult.KeyNotConfigured -> {
+                        CompanionEngine.generateResponse(replyText, entry.mood, personality, fullHistoryForGeneration)
+                    }
                 }
-                is com.example.ai.GeminiResult.KeyNotConfigured -> {
-                    CompanionEngine.generateResponse(replyText, entry.mood, personality)
-                }
+
+                val companionMsg = DecryptedChatMessage(
+                    entryId = entry.id,
+                    sender = "companion",
+                    text = replyMsg,
+                    timestamp = System.currentTimeMillis() + 150
+                )
+                repository.insertDecryptedMessage(companionMsg)
             }
-
-            val companionMsg = DecryptedChatMessage(
-                entryId = entry.id,
-                sender = "companion",
-                text = replyMsg,
-                timestamp = System.currentTimeMillis() + 150
-            )
-            repository.insertDecryptedMessage(companionMsg)
         }
     }
 
@@ -387,11 +388,10 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             val companionMsg = when (companionMsgResult) {
                 is com.example.ai.GeminiResult.Success -> companionMsgResult.responseText
                 is com.example.ai.GeminiResult.Error -> {
-                    "[Connection Notice: Live companion offline (${companionMsgResult.exceptionMessage}). Fallback sequence loaded]\n\n" +
-                    CompanionEngine.generateResponse(entry.mainText, entry.mood, companion)
+                    CompanionEngine.generateResponse(entry.mainText, entry.mood, companion, emptyList())
                 }
                 is com.example.ai.GeminiResult.KeyNotConfigured -> {
-                    CompanionEngine.generateResponse(entry.mainText, entry.mood, companion)
+                    CompanionEngine.generateResponse(entry.mainText, entry.mood, companion, emptyList())
                 }
             }
             
