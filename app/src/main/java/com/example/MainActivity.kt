@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1048,7 +1050,7 @@ fun DailyCheckinScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(imageVector = Icons.Default.Send, contentDescription = "Publish thoughts")
+                Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = "Publish thoughts")
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = if (aiEnabled) "Pour & Seek Understanding" else "Save Private Notepad Log",
@@ -1329,7 +1331,7 @@ fun ChatCompanionScreen(
         ) {
             IconButton(onClick = { viewModel.selectEntry(null) }) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Go back",
                     tint = palette.primary
                 )
@@ -1584,7 +1586,7 @@ fun ChatCompanionScreen(
                         .size(44.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Submit dialogue reply",
                         tint = palette.onPrimary,
                         modifier = Modifier.size(20.dp)

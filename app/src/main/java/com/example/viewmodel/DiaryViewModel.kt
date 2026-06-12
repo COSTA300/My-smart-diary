@@ -32,7 +32,7 @@ class DiaryViewModel(application: Application) : AndroidViewModel(application) {
             DiaryDatabase::class.java,
             "dear_diary_database"
         )
-        .fallbackToDestructiveMigration() // ensures safety across edits
+        .fallbackToDestructiveMigration(true) // ensures safety across edits
         .build()
     }
 
